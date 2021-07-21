@@ -7,7 +7,7 @@ from adafruit_rgb_display.rgb import color565
 import adafruit_rgb_display.st7789 as st7789
 from gpiozero import Button, DigitalOutputDevice
 from sys import exit
-from subprocess import run
+from time import sleep
 
 BORDER = 20
 FONTSIZE = 24
@@ -17,6 +17,10 @@ dc_pin = digitalio.DigitalInOut(board.D25)
 reset_pin = None
 
 BAUDRATE = 64000000
+
+BOUNCE = None
+DELAY = 0.1
+START = 95
 
 spi = board.SPI()
 
@@ -44,18 +48,70 @@ backlight = digitalio.DigitalInOut(board.D22)
 backlight.switch_to_output()
 backlight.value = True
 
-buttonA = digitalio.DigitalInOut(board.D23)
-buttonB = digitalio.DigitalInOut(board.D24)
-buttonA.switch_to_input()
-buttonB.switch_to_input()
+output = '>'
+val = START
+cur = ''
+caps = False
 
-# 13 is ground for up
+def do_select():
+    global caps, val
+    if val != START:
+        if caps and val <= 90:
+            val = val + 32
+        elif not caps and val <= 122:
+            val = val - 32
+    caps = not caps
+
+def do_start():
+    pass
+
+def do_up():
+    global val
+    if val == START:
+        val = 97
+    else:
+        val = val + 1
+
+def do_down():
+    global val
+    if val == START:
+        val = 97
+    else:
+        val = val - 1
+
+def do_left():
+    global output, val
+    if len(output) > 1:
+        if val == START:
+            output = output[0 : len(output) - 1]
+        else:
+            val = START
+
+def do_right():
+    global output, val
+    if val == START:
+        val = 32
+    output = output + chr(val)
+    val = START
+
+select = Button(23, bounce_time=BOUNCE)
+select.when_pressed = do_select
+start = Button(24, bounce_time=BOUNCE)
+start.when_pressed = do_start
+
+# 13 is ground for 'up'
 pin13 = DigitalOutputDevice(13)
 pin13.off()
-up = Button(6)
-down = Button(12)
-left = Button(5)
-right = Button(16)
+up = Button(6, bounce_time=BOUNCE, hold_time=0.25, hold_repeat=True)
+up.when_pressed = do_up
+up.when_held = do_up
+down = Button(12, bounce_time=BOUNCE, hold_time=0.25, hold_repeat=True)
+down.when_pressed = do_down
+down.when_held = do_down
+left = Button(5, bounce_time=BOUNCE)
+left.when_pressed = do_left
+right = Button(16, bounce_time=BOUNCE)
+right.when_pressed = do_right
 
 image = Image.new("RGB", (width, height))
 
@@ -68,35 +124,17 @@ font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FON
 
 def dprint(text):
     draw.rectangle((0, 0, width, height), fill=(0, 0, 0))
-    (font_width, font_height) = font.getsize(text)
     draw.text(
-        (width // 2 - font_width // 2, height // 2 - font_height // 2),
+        (0, 0),
         text,
         font=font,
-        fill=(255, 255, 0),
+        fill=(255, 255, 0)
     )
     disp.image(image)
 
 while True:
     try:
-        status=''
-        if not buttonA.value:
-            status = status + '-'
-        if not buttonB.value:
-            status = status + '+'
-        if up.is_pressed:
-            status = status + '↑'
-        if down.is_pressed:
-            status = status + '↓'
-        if left.is_pressed:
-            status = status + '←'
-        if right.is_pressed:
-            status = status + '→'
-        if not len(status):
-            status = '?'
-        dprint(status)
+        dprint(output + chr(val))
+        sleep(DELAY)
     except KeyboardInterrupt:
-        backlight.deinit()
-        run(['echo 22 > /sys/class/gpio/export 2>/dev/null'], shell=True)
-        run(['echo out > /sys/class/gpio/gpio22/direction'], shell=True)
         exit()
