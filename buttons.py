@@ -8,13 +8,10 @@ import adafruit_rgb_display.st7789 as st7789
 from gpiozero import Button, DigitalOutputDevice
 from sys import exit
 from time import sleep
+from subprocess import run
 
 BORDER = 20
 FONTSIZE = 24
-
-cs_pin = digitalio.DigitalInOut(board.CE0)
-dc_pin = digitalio.DigitalInOut(board.D25)
-reset_pin = None
 
 BAUDRATE = 64000000
 
@@ -31,9 +28,9 @@ disp = st7789.ST7789(
     height=240,
     x_offset=53,
     y_offset=40,
-    cs=cs_pin,
-    dc=dc_pin,
-    rst=reset_pin,
+    cs=digitalio.DigitalInOut(board.CE0),
+    dc=digitalio.DigitalInOut(board.D25),
+    rst=None,
     baudrate=BAUDRATE
 )
 
@@ -63,7 +60,8 @@ def do_select():
     caps = not caps
 
 def do_start():
-    pass
+    global running
+    running = False
 
 def do_up():
     global val
@@ -96,8 +94,8 @@ def do_right():
 
 select = Button(23, bounce_time=BOUNCE)
 select.when_pressed = do_select
-start = Button(24, bounce_time=BOUNCE)
-start.when_pressed = do_start
+start = Button(24, bounce_time=BOUNCE, hold_time=3)
+start.when_held = do_start
 
 # 13 is ground for 'up'
 pin13 = DigitalOutputDevice(13)
@@ -117,9 +115,6 @@ image = Image.new("RGB", (width, height))
 
 draw = ImageDraw.Draw(image)
 
-draw.rectangle((0, 0, width, height), fill=(0, 0, 0))
-disp.image(image)
-
 font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FONTSIZE)
 
 def dprint(text):
@@ -132,9 +127,13 @@ def dprint(text):
     )
     disp.image(image)
 
-while True:
+running = True
+
+while running:
     try:
         dprint(output + chr(val))
         sleep(DELAY)
     except KeyboardInterrupt:
-        exit()
+        exit(0)
+
+exit(1)
